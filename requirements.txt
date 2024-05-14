@@ -1,0 +1,12 @@
+numpy
+pandas
+nltk
+importlib
+textblob
+scikit-learn
+scipy
+matplotlib
+yfinance
+pandas_market_calendars
+transformers
+torch

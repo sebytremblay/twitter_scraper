@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+myenv/
+
+# IDE
+.vscode/
+.idea/
+
+# Compiled files
+*.exe
+*.dll
+*.so
+*.pyd
+
+# Logs
+*.log
+
+# Build directories
+build/
+dist/
+
+# Cache
+.DS_Store
+
+# Date and models
+data/
+bert_models/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Testing
+tests/
+testing.ipynb
+
+# Twitter logins
+utils/twitter_login.txt
+accounts.db
