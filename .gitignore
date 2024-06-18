@@ -37,7 +37,12 @@ bert_models/
 # Testing
 tests/
 testing.ipynb
+sandbox.ipynb
 
 # Twitter logins
 utils/twitter_login.txt
 accounts.db
+
+# Kaggle Notebooks
+gpu_output/
+gpu_version/
