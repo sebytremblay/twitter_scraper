@@ -1,14 +1,10 @@
+import pandas as pd
 import string
 import re
-import pandas as pd
 
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-from scipy.sparse import hstack
-from textblob import TextBlob
-from utils import stock_pricing as sp
-from utils import data_cleaning as dc
 
 def preprocess_tweet(tweet, lemmatizer=WordNetLemmatizer(),
                      keep_urls=True, keep_mentions=True, keep_stock_tickers=True):
@@ -54,82 +50,60 @@ def preprocess_tweet(tweet, lemmatizer=WordNetLemmatizer(),
     
     return final_text
 
-def prepare_features(df, text_columns, categorical_columns, numeric_columns, target_column, vectorizers, encoder, scaler, training_data=False):
-    """Prepare the features for training and evaluation.
+def init_df(force_data_reload, raw_data_path, processed_data_path, data_size, tweet_col):
+    """Initializes dataframe from file path. Re-runs processing if processed file does not exist or re-process flag is set.
 
     Args:
-        df (pd.DataFrame): The input DataFrame.
-        text_columns (list): The names of the text columns.
-        categorical_columns (list): The names of the categorical columns.
-        numeric_columns (list): The names of the numeric columns.
-        target_column (str): The name of the target column.
-        vectorizers (list of TfidfVectorizer): A list of fitted text vectorizers, one for each text column.
-        encoder (OneHotEncoder): The fitted categorical encoder.
-        scaler (StandardScaler): The fitted numeric scaler.
-        training_data (bool): Whether the data is for training or evaluation.
-    
-    Returns:
-        X: The input features.
-        y: The target variable.
+        force_data_reload (_type_): _description_
+        raw_data_path (_type_): _description_
+        processed_data_path (_type_): _description_
+        data_size (_type_): _description_
+        tweet_col (_type_): _description_
+
+    Raises:
+        ValueError: _description_
+        ValueError: _description_
+        
+    Return:
+        pd.DataFrame: the loaded dataframe.
     """
-    # Fit the vectorizers, encoder, and scaler if this is training data
-    if training_data:
-        for text_column, vectorizer in zip(text_columns, vectorizers):
-            vectorizer.fit(df[text_column].astype('U'))
-        encoder.fit(df[categorical_columns])
-        scaler.fit(df[numeric_columns])
-
-    # Transform the text features
-    text_features = [vectorizer.transform(df[text_column].astype('U')) for text_column, vectorizer in zip(text_columns, vectorizers)]
-    if text_features:
-        text_features = hstack(text_features)
-
-    # Transform the categorical and numeric features
-    categorical_features = encoder.transform(df[categorical_columns])
-    numeric_features = scaler.transform(df[numeric_columns])
-
-    # Concatenate all features
-    X = hstack([text_features, categorical_features, numeric_features])
-
-    # Extract the target variable
-    y = df[target_column].values
-    
-    return X, y
-
-
-def run_preprocessing(raw_data_path, processed_data_path, 
-                      timestamp_col, symbol_col, 
-                      database_size, 
-                      raw_text_columns, preprocessed_text_columns, 
-                      lemmatizer=WordNetLemmatizer()):
-    """Preprocess the raw data and save the processed data to a new file.
-
-    Args:
-        raw_data_path (str): The path to the raw data file.
-        processed_data_path (str): The path to save the processed data.
-        timestamp_col (str): The name of the timestamp column.
-        symbol_col (str): The name of the symbol column.
-        database_size (int): The desired size of the resulting database.
-        raw_text_columns (list): The names of the raw text columns.
-        preprocessed_text_columns (list): The names of the preprocessed text columns.
-        lemmatizer (WordNetLemmatizer): The lemmatizer to use.
+    try:
+        # If force_data_regeneration is set, force an exception to reload the data
+        if force_data_reload:
+            print('Forcing data regeneration.')
+            raise ValueError('Forcing data regeneration.')
         
-    Returns:
-        pd.DataFrame: The preprocessed data.
-    """
-    # Load dataset with stock data
-    df = sp.preprocess_nasdaq_df(raw_data_path, timestamp_col, symbol_col, database_size)
-    
-    for raw_col, processed_col in zip(raw_text_columns, preprocessed_text_columns):
-        # Add sentiment column with TextBlob if it doesn't exist
-        df[f'{raw_col}_polarity'] = df[raw_col].apply(lambda tweet: TextBlob(tweet).sentiment.polarity if pd.notna(tweet) else None)
-        df[f'{raw_col}_subjectivity'] = df[raw_col].apply(lambda tweet: TextBlob(tweet).sentiment.subjectivity if pd.notna(tweet) else None)
+        # Load the preprocessed data if it exists
+        df = pd.read_csv(processed_data_path)
         
-        # Apply preprocessing to the raw column
-        df[processed_col] = df[raw_col].apply(lambda tweet: dc.preprocess_tweet(tweet, lemmatizer) if pd.notna(tweet) else None)
+        # If dataframe is not expected size, reload the data
+        if data_size != -1 and len(df) > data_size:
+            df = df.sample(n=data_size)
+        elif data_size != -1 and len(df) < data_size:    
+            print('Preprocessed file is not the expected size. Reloading data.')
+            raise ValueError('Preprocessed file is not the expected size.')
         
-    # Save the preprocessed data
-    df.to_csv(processed_data_path, index=False)
-    print('File preprocessing completed and saved.')
-    
+        print('Preprocessed file found and loaded.')
+    except (FileNotFoundError, ValueError):
+        # Load raw data
+        df = pd.read_csv(raw_data_path)
+        
+        # Ensure no duplicates
+        orig_len = len(df)
+        df = df.drop_duplicates()
+        print(f"Removed {orig_len - len(df)} duplicates")
+
+        # Preprocess the tweet column
+        df[tweet_col] = df[tweet_col].apply(lambda x: preprocess_tweet(x))
+        
+        # Save the preprocessed file for reuse
+        df.to_csv(processed_data_path)
+        print('Processing complete and saved to disk.')
+        
+        # Sample data accordingly
+        df = df.sample(n=data_size)
+
+    # Display the preprocessed dataframe
+    pd.set_option('display.max_colwidth', None)
+    print(f"Dataframe shape: {df.shape}")
     return df
